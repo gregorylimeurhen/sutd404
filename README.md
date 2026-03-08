@@ -1,7 +1,7 @@
 # mlops
 
 ## Objective
-Given a SUTD room name or address, return the corresponding address or name at extremely low latency using a language model.
+Given an SUTD room name or address, return the corresponding SUTD room address or name at low latency using a language model.
 ```mermaid
 graph LR
   parse_question["Parse question"] --> infer_answer["Infer answer"]
