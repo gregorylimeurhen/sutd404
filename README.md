@@ -12,20 +12,19 @@ graph LR
 
 ## Data
 
-Let `<` be a beginning-of-sequence (BOS) token,
-and `>` be an end-of-sequence (EOS) token,
-and `n` denote a name,
-and `N` denote a list of names.
-and `a` denote an address,
-and `A` denote a list of addresses.
+Let `<` be a beginning-of-sequence (BOS) token, and `>` be an end-of-sequence (EOS) token, and `n` denote a name, and `N` denote a list of names, and `a` denote an address, and `A` denote a list of addresses.
 
-1. Scrape HTML into raw dataset from [Getting around SUTD](https://sutd.edu.sg/contact-us/getting-around-sutd) using a polite web scraper.
-2. Convert raw dataset into an edge dataset by writing each name and address canonically.
-3. Convert edge dataset into pre-training datasets `names.txt`, `addresses.txt`, and fine-tuning datasets `n2a.txt`, `a2n.txt`:
-  - `names.txt` contains rows of names.
-  - `addresses.txt` contains rows of addresses.
-  - `n2a.txt` contains rows of `n<A>`.
-  - `a2n.txt` contains rows of `a<N>`.
+1. Generate raw dataset from [Getting around SUTD](https://sutd.edu.sg/contact-us/getting-around-sutd) by scraping its HTML politely.
+2. Generate edge dataset `./data/edges.tsv` from raw dataset by writing each name and address canonically.
+3. Craft non-numerical and numerical substitution datasets `./data/nns.csv`, `./data/ns.csv`.
+4. Generate augmented pre-training and fine-tuning datasets `./data/names.txt`, `./data/addresses.txt`, `./data/n2A.txt`, `./data/a2N.txt` from `./data/edges.tsv`, `./data/nns.csv`, `./data/ns.csv`.
+
+| dataset                | training phase | row content |
+| ---------------------- | -------------- | ----------- |
+| `./data/names.txt`     | pre-training   | name        |
+| `./data/addresses.txt` | pre-training   | address     |
+| `./data/n2A.txt`       | fine-tuning    | `n<A>`      |
+| `./data/a2N.txt`       | fine-tuning    | `a<N>`      |
 
 ## Architecture
 
