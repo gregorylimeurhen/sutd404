@@ -346,14 +346,10 @@ def build_datasets(data_path):
 	val = rewrites[::2]
 	test = rewrites[1::2]
 	return {
-		"addresses": addresses,
-		"finetune": finetune,
-		"name_to_addresses": {name: sorted(address_set, key=address_sort_key) for name, address_set in name_to_addresses.items()},
-		"names": names,
 		"pretrain": names + addresses,
+		"finetune": finetune,
 		"test": test,
 		"val": val,
-		"variants": variants,
 	}
 
 
@@ -367,11 +363,6 @@ def materialize_data_file(data_path):
 	if updated != text:
 		path.write_text(updated)
 	return datasets
-
-
-def read_materialized_rows(data_path):
-	text = Path(data_path).read_text()
-	return {name: [line for line in extract_section(text, name).splitlines() if line.strip()] for name in ["pretrain", "finetune", "val", "test"]}
 
 
 def split_rows(rows, seed, ratio=0.9):
@@ -399,14 +390,13 @@ def build_tokenizer(rows):
 
 def build_model(config, tokenizer, rows):
 	block_size = max(len(row) for row in rows)
-	block_size = max(block_size, int(config.get("block_size", block_size)))
 	return GPT2(
 		vocab_size=tokenizer.vocab_size,
 		block_size=block_size,
-		width=int(config.get("width", 128)),
-		heads=int(config.get("heads", 4)),
-		layers=int(config.get("layers", 4)),
-		dropout=float(config.get("dropout", 0.1)),
+		width=128,
+		heads=4,
+		layers=4,
+		dropout=0.1,
 	)
 
 
@@ -468,9 +458,9 @@ def train_stage(model, stage, train_rows, val_rows, tokenizer, device, run_dir, 
 	if not train_rows:
 		return epoch_offset, []
 	checkpoint_dir = Path(run_dir) / "checkpoints"
-	batch_size = int(config.get("batch_size", 32))
-	epochs = int(config.get(f"{stage}_epochs", config.get("epochs", 100)))
-	patience = int(config.get(f"{stage}_patience", config.get("patience", 10)))
+	batch_size = int(config["batch_size"])
+	epochs = int(config[f"{stage}_epochs"])
+	patience = math.floor(epochs * 0.08)
 	optimizer = torch.optim.AdamW(model.parameters())
 	best_epoch = 0
 	best_state = clone_state_dict(model)
@@ -483,9 +473,8 @@ def train_stage(model, stage, train_rows, val_rows, tokenizer, device, run_dir, 
 		val_loss = evaluate_loss(model, val_rows, tokenizer, device, batch_size)
 		record = {
 			"epoch": global_epoch,
-			"grad_norm": grad_norm,
 			"stage": stage,
-			"stage_epoch": stage_epoch,
+			"grad_norm": grad_norm,
 			"train_loss": train_loss,
 			"val_loss": val_loss,
 		}
@@ -513,13 +502,13 @@ def prompt_and_target(row):
 	return name + "<", rest[:-1] if rest.endswith(">") else rest
 
 
-def generate_until_eos(model, tokenizer, prompt, device, max_new_tokens):
+def generate_until_eos(model, tokenizer, prompt, device, max_tokens):
 	model.eval()
 	input_ids = torch.tensor([tokenizer.encode(prompt)], dtype=torch.long, device=device)
 	start = time.time()
 	generated = []
 	with torch.no_grad():
-		for _ in range(max_new_tokens):
+		for _ in range(max_tokens):
 			window = input_ids[:, -model.block_size :]
 			logits, _ = model(window)
 			next_id = int(torch.argmax(logits[:, -1, :], dim=-1).item())
@@ -531,19 +520,19 @@ def generate_until_eos(model, tokenizer, prompt, device, max_new_tokens):
 	return "".join(generated), time.time() - start
 
 
-def evaluate_rows(model, rows, tokenizer, metrics, device, max_new_tokens):
+def evaluate_rows(model, rows, tokenizer, metrics, device, max_tokens):
 	predictions = []
 	targets = []
 	durations = []
 	details = []
 	for row in rows:
 		prompt, target = prompt_and_target(row)
-		completion, duration = generate_until_eos(model, tokenizer, prompt, device, max_new_tokens)
+		completion, duration = generate_until_eos(model, tokenizer, prompt, device, max_tokens)
 		prediction = completion.split(">", 1)[0]
 		predictions.append(prediction)
 		targets.append(target)
 		durations.append(duration)
-		details.append({"prediction": prediction, "prompt": prompt, "target": target, "ttlt": duration})
+		details.append({"gold": target, "input": prompt, "output": prediction, "ttlt": duration})
 	scores = {f"mean_{metric.name}": metric(predictions, targets, durations) for metric in metrics}
 	return scores, details
 

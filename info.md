@@ -42,12 +42,12 @@ e.g. `(dataset=..., architecture=..., metrics=..., seed=37)`,
 and `scores` looks like e.g. `(val_mean_nls=..., test_mean_nls=..., val_mean_ttlt=..., test_mean_ttlt=...)`,
 and `duration` is the time taken from the start to the end of the run e.g. `1600`.
 
-`main.py` is the entry point that
+`main.py` is the entry point that:
 - sets a run ID by taking the first 6 digits of the SHA-1 of the UNIX timestamp at the current time.
 - enforces reproducibility using the seed from `config.yaml`.
 - runs training (pre-training -> fine-tuning) with:
   - AdamW optimizer on default settings.
-  - checkpointing and logging of train_loss, val_loss, grad_norm at every epoch, and early stopping, with the convention that the last epoch minimises val loss.
+  - checkpointing and logging of train_loss, val_loss, grad_norm at every epoch.
   - a `tqdm` progress bar of length 80.
 
 ## Data

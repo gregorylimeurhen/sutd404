@@ -1,4 +1,3 @@
-import argparse
 import csv
 import hashlib
 import shutil
@@ -8,17 +7,6 @@ import yaml
 
 from pathlib import Path
 from src import *
-
-
-def parse_args():
-	parser = argparse.ArgumentParser()
-	parser.add_argument("--prepare-only", action="store_true")
-	parser.add_argument("--train-only", action="store_true")
-	return parser.parse_args()
-
-
-def load_config(path):
-	return yaml.safe_load(Path(path).read_text())
 
 
 def stringify(value):
@@ -68,56 +56,47 @@ def append_scoreboard(path, identifier, config, scores, duration):
 		writer.writerow([identifier, compact_mapping(config), compact_mapping(scores), int(round(duration))])
 
 
-def device_for(config):
-	if config.get("device"):
-		return torch.device(config["device"])
+def device_for():
 	return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def prefixed(prefix, scores):
-	return {f"{prefix}_{key}": value for key, value in scores.items()}
-
-
 def main():
-	args = parse_args()
 	start = time.time()
 	root = Path(__file__).resolve().parent
 	config_path = root / "config.yaml"
 	data_path = root / "data.md"
 	scoreboard_path = root / "scoreboard.csv"
-	config = load_config(config_path)
-	device = device_for(config)
+	config = yaml.safe_load(config_path.read_text())
+	device = device_for()
 	set_seed(int(config["seed"]))
-	if args.train_only:
-		datasets = read_materialized_rows(data_path)
-	else:
-		datasets = materialize_data_file(data_path)
-	if args.prepare_only:
-		return
+	datasets = materialize_data_file(data_path)
 	rows = datasets["pretrain"] + datasets["finetune"] + datasets["val"] + datasets["test"]
 	tokenizer = build_tokenizer(rows)
+
 	if config["architecture"] != "GPT2":
 		raise ValueError(f'Unsupported architecture {config["architecture"]}')
+
 	model = build_model(config, tokenizer, rows).to(device)
 	identifier = run_id()
 	run_dir = ensure_run_dir(root, identifier)
 	snapshot_sources(run_dir, config_path, data_path)
-	pretrain_name = config.get("dataset", "pretrain")
+	pretrain_name = config["dataset"]
+
 	if pretrain_name not in datasets:
 		raise ValueError(f"Unknown dataset {pretrain_name}")
+
 	pretrain_train, pretrain_val = split_rows(datasets[pretrain_name], int(config["seed"]))
 	epoch = 0
 	epoch, pretrain_history = train_stage(model, "pretrain", pretrain_train, pretrain_val, tokenizer, device, run_dir, config, epoch)
 	epoch, finetune_history = train_stage(model, "finetune", datasets["finetune"], datasets["val"], tokenizer, device, run_dir, config, epoch)
 	history = pretrain_history + finetune_history
 	metrics = instantiate_metrics(config["metrics"])
-	max_new_tokens = int(config.get("max_new_tokens", max(len(prompt_and_target(row)[1]) for row in datasets["finetune"] + datasets["val"] + datasets["test"]) + 1))
-	val_scores, val_details = evaluate_rows(model, datasets["val"], tokenizer, metrics, device, max_new_tokens)
-	test_scores, test_details = evaluate_rows(model, datasets["test"], tokenizer, metrics, device, max_new_tokens)
-	scores = {**prefixed("val", val_scores), **prefixed("test", test_scores)}
-	write_records(run_dir / "history.csv", history, ["stage", "epoch", "stage_epoch", "train_loss", "val_loss", "grad_norm"])
-	write_records(run_dir / "val_predictions.csv", val_details, ["prompt", "target", "prediction", "ttlt"])
-	write_records(run_dir / "test_predictions.csv", test_details, ["prompt", "target", "prediction", "ttlt"])
+	max_tokens = int(config["max_tokens"])
+	val_scores, val_details = evaluate_rows(model, datasets["val"], tokenizer, metrics, device, max_tokens)
+	test_scores, test_details = evaluate_rows(model, datasets["test"], tokenizer, metrics, device, max_tokens)
+	scores = {f"val_{key}": value for key, value in val_scores.items()} | {f"test_{key}": value for key, value in test_scores.items()}
+	write_records(run_dir / "training.log", history, ["epoch", "stage", "train_loss", "val_loss", "grad_norm"])
+	write_records(run_dir / "evaluation.csv", val_details + test_details, ["input", "gold", "output", "ttlt"])
 	append_scoreboard(scoreboard_path, identifier, config, scores, time.time() - start)
 
 

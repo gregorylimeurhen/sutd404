@@ -2,3 +2,8 @@ dataset: "pretrain"
 architecture: "GPT2"
 metrics: ["NLS", "TTLT"]
 seed: 37
+
+batch_size: 32
+max_tokens: 64
+pretrain_epochs: 100
+finetune_epochs: 100
