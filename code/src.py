@@ -388,7 +388,7 @@ def build_tokenizer(rows):
 	return CharTokenizer(rows)
 
 
-def build_model(config, tokenizer, rows):
+def build_model(tokenizer, rows):
 	block_size = max(len(row) for row in rows)
 	return GPT2(
 		vocab_size=tokenizer.vocab_size,
@@ -398,6 +398,65 @@ def build_model(config, tokenizer, rows):
 		layers=4,
 		dropout=0.1,
 	)
+
+
+def longest_training_row(rows, tokenizer):
+	dataset = TextDataset(rows, tokenizer)
+	if not len(dataset):
+		return None
+	return max(dataset.rows, key=lambda item: item.numel())
+
+
+def infer_max_tokens(rows, tokenizer):
+	structured_rows = [row for row in rows if "<" in row]
+	if not structured_rows:
+		return 1
+	return max(len(tokenizer.encode(prompt_and_target(row)[1] + ">")) for row in structured_rows)
+
+
+def fits_batch_size(model, sample, pad_id, device, batch_size):
+	try:
+		inputs, targets = collate_rows([sample] * batch_size, pad_id)
+		inputs = inputs.to(device)
+		targets = targets.to(device)
+		model.zero_grad(set_to_none=True)
+		_, loss = model(inputs, targets)
+		loss.backward()
+		if device.type == "cuda":
+			torch.cuda.synchronize(device)
+		return True
+	except RuntimeError as error:
+		if "out of memory" not in str(error).lower():
+			raise
+		return False
+	finally:
+		model.zero_grad(set_to_none=True)
+		if device.type == "cuda":
+			torch.cuda.empty_cache()
+
+
+def infer_batch_size(model, rows, tokenizer, device, maximum=512):
+	sample = longest_training_row(rows, tokenizer)
+	if sample is None:
+		return 1
+	if device.type != "cuda":
+		return max(1, min(32, 4096 // max(sample.numel() - 1, 1)))
+	if not fits_batch_size(model, sample, tokenizer.pad_id, device, 1):
+		raise RuntimeError("Unable to fit a single training example on the selected CUDA device")
+	low = 1
+	high = 2
+	while high <= maximum and fits_batch_size(model, sample, tokenizer.pad_id, device, high):
+		low = high
+		if high == maximum:
+			return high
+		high = min(high * 2, maximum)
+	while low + 1 < high:
+		mid = (low + high) // 2
+		if fits_batch_size(model, sample, tokenizer.pad_id, device, mid):
+			low = mid
+			continue
+		high = mid
+	return low
 
 
 def batch_grad_norm(model):
@@ -454,12 +513,11 @@ def save_checkpoint(path, model, tokenizer, metadata):
 	torch.save({"metadata": metadata, "model": model.state_dict(), "tokenizer": tokenizer.itos}, path)
 
 
-def train_stage(model, stage, train_rows, val_rows, tokenizer, device, run_dir, config, epoch_offset):
+def train_stage(model, stage, train_rows, val_rows, tokenizer, device, run_dir, config, batch_size, epoch_offset, run):
 	if not train_rows:
 		return epoch_offset, []
 	checkpoint_dir = Path(run_dir) / "checkpoints"
-	batch_size = int(config["batch_size"])
-	epochs = int(config[f"{stage}_epochs"])
+	epochs = int(config["epochs"])
 	patience = math.floor(epochs * 0.08)
 	optimizer = torch.optim.AdamW(model.parameters())
 	best_epoch = 0
@@ -478,6 +536,7 @@ def train_stage(model, stage, train_rows, val_rows, tokenizer, device, run_dir, 
 			"train_loss": train_loss,
 			"val_loss": val_loss,
 		}
+		run.log(record, step=global_epoch)
 		records.append(record)
 		save_checkpoint(checkpoint_dir / f"{global_epoch:03d}.pt", model, tokenizer, record)
 		if val_loss <= best_val_loss:
