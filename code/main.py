@@ -1,10 +1,10 @@
-import hashlib
 import shutil
 import time
 import torch
 import wandb
 import yaml
 
+from datetime import datetime
 from dotenv import load_dotenv
 from pathlib import Path
 from src import *
@@ -15,7 +15,7 @@ def compact_items(data):
 
 
 def run_id():
-	return hashlib.sha1(str(time.time()).encode()).hexdigest()[:6]
+	return datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 def ensure_run_dir(root, identifier):
