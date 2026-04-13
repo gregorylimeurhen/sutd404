@@ -8,4 +8,4 @@ depth = 4
 epochs = 50
 
 [test]
-checkpoint = 50
+run = T...

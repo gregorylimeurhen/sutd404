@@ -192,7 +192,7 @@ def largest_batch_size(model, examples, tokenizer, device):
 	return best
 
 
-def train(model, rows, tokenizer, device, run_dir, epochs, run):
+def train(model, rows, tokenizer, device, model_path, epochs, run):
 	examples = [src.utils.encode_pair(row["input"], row["gold"], tokenizer) for row in rows]
 	batch_size = largest_batch_size(model, examples, tokenizer, device)
 	optimizer = torch.optim.Adam(model.parameters())
@@ -203,6 +203,7 @@ def train(model, rows, tokenizer, device, run_dir, epochs, run):
 		model.train()
 		total_loss = 0.0
 		total_steps = 0
+		src.utils.show_progress(f"train {epoch}/{epochs}", 0, len(order))
 		for start in range(0, len(order), batch_size):
 			batch = [examples[index] for index in order[start:start + batch_size]]
 			input_ids, labels = src.utils.collate_examples(batch, tokenizer, device)
@@ -212,8 +213,10 @@ def train(model, rows, tokenizer, device, run_dir, epochs, run):
 			optimizer.step()
 			total_loss += float(loss.item())
 			total_steps += 1
-		save_checkpoint(run_dir / "checkpoints" / f"{epoch:04d}.pt", model, tokenizer, rooms)
+			src.utils.show_progress(f"train {epoch}/{epochs}", min(start + len(batch), len(order)), len(order))
 		run.log({"epoch": epoch, "train_loss": total_loss / total_steps, "batch_size": batch_size})
+	src.utils.end_progress()
+	save_checkpoint(model_path, model, tokenizer, rooms)
 	return batch_size
 
 

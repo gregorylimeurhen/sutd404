@@ -44,9 +44,10 @@ def evaluate_rows(model, rows, tokenizer, device, room_lookup, rooms):
 	trie = src.utils.build_room_trie(rooms, tokenizer)
 	stats = {name: {"correct": 0, "latency": 0.0} for name in ["identity", "levenshtein", "ours"]}
 	details = []
-	for row in rows:
-		text = src.utils.normalize(row["input"])
-		gold_room = src.utils.normalize(row["gold"])
+	src.utils.show_progress("test", 0, len(rows))
+	for row_index, row in enumerate(rows, start=1):
+		text = row["input"]
+		gold_room = row["gold"]
 		gold_address = room_lookup[gold_room]
 		start = time.perf_counter()
 		identity = identity_address(text, room_lookup)
@@ -70,7 +71,9 @@ def evaluate_rows(model, rows, tokenizer, device, room_lookup, rooms):
 				"ours": ours,
 			}
 		)
+		src.utils.show_progress("test", row_index, len(rows))
 	total = len(rows)
+	src.utils.end_progress()
 	return {
 		name: {
 			"accuracy": values["correct"] / total,

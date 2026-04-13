@@ -14,9 +14,8 @@ def main():
 	config = src.utils.load_config(root, "train")
 	rows = src.utils.load_training_rows(root)
 	device = src.utils.device_for()
-	run_dir = src.utils.ensure_run_dir(root, "T", "checkpoints")
-	src.utils.copy_tree(root, run_dir)
-	src.utils.copy_project_files(root, run_dir)
+	run_dir = src.utils.ensure_run_dir(root, "T")
+	src.utils.write_snapshot(run_dir / "snapshot.zip", root)
 	src.utils.set_seed(0)
 	tokenizer = src.utils.build_tokenizer(root)
 	model = src.models.build_model(config["depth"], tokenizer, src.utils.rows_block_size(rows)).to(device)
@@ -28,7 +27,7 @@ def main():
 			project="mlops",
 			settings=wandb.Settings(quiet=True, show_info=False, show_warnings=False, console="off"),
 		) as run:
-			batch_size = src.models.train(model, rows, tokenizer, device, run_dir, config["epochs"], run)
+			batch_size = src.models.train(model, rows, tokenizer, device, run_dir / "model.pt", config["epochs"], run)
 			run.log({"batch_size": batch_size, "seconds": time.time() - start})
 	finally:
 		remove_wandb_dir(run_dir)
