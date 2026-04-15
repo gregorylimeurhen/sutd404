@@ -515,7 +515,9 @@ def can_fit_batch(model, examples, tokenizer, device):
 
 def largest_batch_size(model, examples, tokenizer, device):
 	if device.type != "cuda":
-		return min(32, len(examples))
+		best = min(32, len(examples))
+		print(f"batch_size {best}")
+		return best
 	key = lambda example: len(example["input_ids"])
 	longest = sorted(examples, key=key, reverse=True)
 	best = 1
@@ -526,6 +528,7 @@ def largest_batch_size(model, examples, tokenizer, device):
 		best = candidate
 		candidate *= 2
 	if candidate > len(longest):
+		print(f"batch_size {best}")
 		return best
 	low = best + 1
 	high = min(candidate - 1, len(longest))
@@ -536,6 +539,7 @@ def largest_batch_size(model, examples, tokenizer, device):
 			low = middle + 1
 			continue
 		high = middle - 1
+	print(f"batch_size {best}")
 	return best
 
 
@@ -573,6 +577,7 @@ def train_epoch(model, examples, tok, dev, opt, batch, epoch, seed):
 			model.zero_grad(set_to_none=True)
 			torch.cuda.empty_cache()
 			batch //= 2
+			print(f"batch_size {batch}")
 			continue
 		finally:
 			del input_ids, labels, loss
@@ -606,6 +611,7 @@ def val_loss(model, examples, tok, dev, batch):
 				raise
 			torch.cuda.empty_cache()
 			batch //= 2
+			print(f"batch_size {batch}")
 			continue
 		finally:
 			del input_ids, labels, loss
