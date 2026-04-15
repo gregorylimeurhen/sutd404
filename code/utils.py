@@ -425,9 +425,7 @@ def encode(prompt_ids, output_text, tokenizer):
 def show_progress(label, current, total, width=20):
 	total = max(1, total)
 	current = min(max(0, current), total)
-	filled = current * width // total
-	bar = "#" * filled + "-" * (width - filled)
-	sys.stdout.write(f"\r{label} [{bar}] {current}/{total}")
+	sys.stdout.write(f"\r{label} {current}/{total}")
 	sys.stdout.flush()
 
 
