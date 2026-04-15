@@ -1,0 +1,18 @@
+{
+  "identity": {
+    "accuracy": 0.0,
+    "mean_latency": 1.1259751368520987e-06
+  },
+  "levenshtein": {
+    "accuracy": 0.725,
+    "mean_latency": 0.011858031168877561
+  },
+  "damerau_levenshtein": {
+    "accuracy": 0.7194444444444444,
+    "mean_latency": 0.02063413550721533
+  },
+  "ours": {
+    "accuracy": 0.9731481481481481,
+    "mean_latency": 0.024991819180798267
+  }
+}

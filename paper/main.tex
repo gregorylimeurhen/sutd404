@@ -158,7 +158,8 @@ $$
 % The data is thus fixed after preprocessing
 
 The denoiser is a Nanochat-parameterised, character-level transformer
-with decoding constrained by the room trie.
+with **greedy decoding constrained by the room trie**.
+But the decoder can obviously be swapped out for whatever you want.
 We use cross-entropy loss with the Adam optimiser.
 
 % Search the web for https://github.com/karpathy/nanochat
@@ -184,6 +185,14 @@ We use cross-entropy loss with the Adam optimiser.
 		\State \Return $a$
 	\end{algorithmic}
 \end{algorithm}
+
+% At inference, keep the trained character-level transformer exactly as it is, but replace greedy trie decoding with an anytime search over the room trie.
+% First, run the current greedy decoder once to get an initial best room.
+% Then keep a priority queue of trie prefixes, where each prefix is a partial room name that can still be extended to some room in $R$.
+% Score each prefix by the transformer’s accumulated log-probability on the characters generated so far, and use a tiny extra priority bonus for prefixes whose possible completions have lengths close to the query length, so that obviously too-short or too-long rooms are explored later.
+% Repeatedly expand the highest-priority prefix by one trie character, update the current best answer whenever a complete room is found with a better transformer score, and continue until either you want to stop and return the best room found so far, or the remaining unfinished prefixes can no longer beat the current best room, in which case the result is the exact global best room under the model.
+% This changes only the decoder, needs no new training, and gives the Stockfish-like behaviour of immediate answers, smooth improvement, and exact convergence if allowed to continue.
+% Use pure branch-and-bound priority equal to the admissible upper bound itself, with no extra heuristic at all.
 
 \section{Experimentation}
 

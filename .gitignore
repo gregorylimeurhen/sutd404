@@ -5,7 +5,6 @@ code/data/n2a.tsv
 code/data/test.tsv
 code/data/train.tsv
 code/data/val.tsv
-code/runs/
 paper/*.aux
 paper/*.bbl
 paper/*.fdb_latexmk

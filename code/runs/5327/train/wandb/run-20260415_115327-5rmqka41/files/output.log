@@ -1,0 +1,2 @@
+batch_size 64
+train 202 8640/8640
