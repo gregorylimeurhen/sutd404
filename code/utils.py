@@ -547,12 +547,24 @@ def loss_tokens(labels):
 	return int(labels.ne(-100).sum().item())
 
 
+def grad_norm(model):
+	total = 0.0
+	for param in model.parameters():
+		grad = param.grad
+		if grad is None:
+			continue
+		total += float(grad.detach().pow(2).sum().item())
+	return total ** 0.5
+
+
 def train_epoch(model, examples, tok, dev, opt, batch, epoch, seed):
 	order = list(range(len(examples)))
 	Rng(seed + epoch).shuffle(order)
 	model.train()
 	total_loss = 0.0
+	total_grad_norm = 0.0
 	total_tokens = 0
+	total_steps = 0
 	show_progress(f"train {epoch}", 0, len(order))
 	start = 0
 	while start < len(order):
@@ -567,6 +579,7 @@ def train_epoch(model, examples, tok, dev, opt, batch, epoch, seed):
 			opt.zero_grad(set_to_none=True)
 			loss = model(input_ids, labels)
 			loss.backward()
+			grad_value = grad_norm(model)
 			opt.step()
 			loss_value = float(loss.item())
 			token_count = loss_tokens(labels)
@@ -581,11 +594,13 @@ def train_epoch(model, examples, tok, dev, opt, batch, epoch, seed):
 			continue
 		finally:
 			del input_ids, labels, loss
+		total_grad_norm += grad_value
 		total_loss += loss_value * token_count
 		total_tokens += token_count
+		total_steps += 1
 		start += len(rows)
 		show_progress(f"train {epoch}", start, len(order))
-	return total_loss / total_tokens, batch
+	return total_loss / total_tokens, batch, total_grad_norm / total_steps
 
 
 def val_loss(model, examples, tok, dev, batch):
@@ -631,26 +646,32 @@ def train(model, train_rows, val_rows, tok, dev, path, tolerance, run, seed):
 		prompt = tok.encode_text(row["input"])
 		val_xs.append(encode(prompt, row["gold"], tok))
 	batch = largest_batch_size(model, train_xs, tok, dev)
-	opt = torch.optim.Adam(model.parameters())
+	opt = torch.optim.AdamW(model.parameters())
+	patience = max(1, tolerance // 2)
+	make_sched = torch.optim.lr_scheduler.ReduceLROnPlateau
+	sched = make_sched(opt, factor=0.1, patience=patience)
 	rooms = sorted({row["gold"] for row in train_rows})
 	path = pathlib.Path(path)
 	latest = path.with_name("latest.pt")
 	best_val = None
 	best_epoch = 0
 	epoch = 0
+	step = train_epoch
 	tx = train_xs
 	vx = val_xs
 	try:
 		while True:
 			epoch += 1
-			loss, batch = train_epoch(model, tx, tok, dev, opt, batch, epoch, seed)
+			loss, batch, norm = step(model, tx, tok, dev, opt, batch, epoch, seed)
 			current_val_loss, batch = val_loss(model, vx, tok, dev, batch)
+			sched.step(current_val_loss)
 			save_checkpoint(latest, model, tok, rooms)
 			if best_val is None or current_val_loss < best_val:
 				best_val = current_val_loss
 				best_epoch = epoch
 				save_checkpoint(path, model, tok, rooms)
 			run.log({
+				"grad_norm": norm,
 				"train_loss": loss,
 				"val_loss": current_val_loss,
 			})
