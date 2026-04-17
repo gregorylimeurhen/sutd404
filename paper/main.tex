@@ -65,6 +65,8 @@ Digital resources like the SUTD Assistive Maps (SAM) Telegram bot exist, but are
 To fill this gap, we built SUTD 404, a digital resource that aims to maps rooms to addresses in a way that learns over time and handles noise gracefully.
 Our GitHub repository can be found at \url{gregorylimeurhen/sutd404}.
 
+\newpage
+
 \section{Methodology}
 
 % Read comments for developer (i.e. implementation) prose not in the paper please!
@@ -81,8 +83,9 @@ and $C\in\N$ be a corruption count,
 and $\alpha\in\R_{[0,1]}$ be a transposition rate,
 and $\beta\in\R_{[0,1]}$ be a substitution rate,
 and $\bm{\pi}=(\pi_\mathrm{train},\pi_\mathrm{val},\pi_\mathrm{test})\in\Delta^{2}$ be a training-validation-testing split,
-and $P:V\rightharpoonup\Z^{2}$ be a keyboard-position map,
-and $C\bm{\pi}\in\N^{3}$.
+and $I:V\rightharpoonup\Z^{2}$ be a keyboard-position map,
+and $C\bm{\pi}\in\N^{3}$,
+and each tie be broken uniform randomly.
 
 \begin{definition}[Keyboard]
 $${\setlength{\arraycolsep}{2pt}
@@ -133,7 +136,7 @@ All keys have equal padding between them.
 			${\bm{x}\sim\alpha\,\mathcal{U}(T)+(1-\alpha)\,\delta(\bm{x})}$
 		\EndIf
 		\For{$i\in[1..\abs{\bm{x}}]$}
-			\State $S\gets\{k\in K\setminus \{x_{i}\}\mid P(k)-P(x_{i})\in[-1..1]\times[-2..2]\}$
+			\State $S\gets\{k\in K\setminus \{x_{i}\}\mid I(k)-I(x_{i})\in[-1..1]\times[-2..2]\}$
 			\If{$S\neq\varnothing$}
 				${x_{i}\sim\beta\,\mathcal{U}(S)+(1-\beta)\,\delta(x_{i})}$
 			\EndIf
@@ -141,15 +144,6 @@ All keys have equal padding between them.
 		\State \Return $\bm{x}$
 	\end{algorithmic}
 \end{algorithm}
-
-Our corruption algorithm corrupts strings by transposing spans and substituting characters.
-First, the algorithm rolls a dice that
-either does nothing
-or transposes spans in the string by uniformly sampling from the space of span transpositions.
-Then, for each character in the string, the algorithm rolls a dice that
-either does nothing
-or substitutes the character by uniformly sampling from the space of character substitutions.
-This space contains nearby characters collected by sliding a window of height $3$ and width $5$ centred at each position in $K$.
 
 \begin{algorithm}[H]
 	\caption{$\textsc{Split}()$}
@@ -180,6 +174,14 @@ This space contains nearby characters collected by sliding a window of height $3
 	\end{algorithmic}
 \end{algorithm}
 
+We set $C=50$, and $\alpha=0.5$, and $\beta=0.05$, and $\bm{\pi}=(0.8,0.1,0.1)$.
+Our corruption algorithm corrupts strings by transposing spans and substituting characters.
+First, the algorithm samples whether to transpose spans by uniformly sampling from the space of span transpositions.
+Then, for each character in the string, the algorithm samples whether to substitute the character by uniformly sampling from the space of character substitutions.
+This space contains nearby characters collected by sliding a window of height $3$ and width $5$ centred at each position in $K$.
+Finally, the algorithm returns the corrupted string.
+The algorithm terminates on our hyperparameter choices.
+
 \begin{definition}[Denoiser]
 Let $f:V^{*}\times R\to\R$ be a scorer.
 \begin{align*}
@@ -209,7 +211,7 @@ $$
 % so look-up for `foo` yields `A, B`
 % The data is thus fixed after preprocessing
 
-Our denoiser is a standard Nanochat-parameterised transformer of depth $2$ with character-level tokenisation.
+Our denoiser is a standard Nanochat-parameterised transformer of depth $2$ with character-level tokenisation. % cite karpathy/nanochat
 We use character-level tokenisation as typos are often character-level, and room names are short enough for individual characters to be highly meaningful semantic units for our task.
 We use a standard cross-entropy loss and AdamW optimiser.
 A complete list of hyperparameters can be found in our GitHub repository.
@@ -227,24 +229,26 @@ Our lookup is a standard key-value map from rooms to addresses.
 \begin{algorithm}[H]
 	\caption{$\textsc{Infer}(f,x)$}
 	\begin{algorithmic}
-		\Require $f:V^{*}\to\R$, $x\in V^{*}$
-		\State $x\gets\textsc{Strip}(x)$
-		\State $x\gets\textsc{Lowercase}(x)$
+		\Require $f:V^{*}\times R\to\R$, $x\in V^{*}$
 		\If{$x\not\in R$}
-			\State $x\gets\mathscr{D}_{f}(x)$
+			$x\gets\mathscr{D}_{f}(x)$
 		\EndIf
-		\State $x\gets\mathscr{L}(r)$
+		\State $x\gets\mathscr{L}(x)$
 		\State \Return $x$
 	\end{algorithmic}
 \end{algorithm}
 
 Our inference algorithm receives a scorer and string as input.
-First, the algorithm normalises the string by stripping whitespace and lowercasing letters.
-Then, the algorithm denoises the string to a room using the scorer if the string is not a room.
-Finally, the algorithm looks up the address of the room, and returns the address.
+First, the algorithm denoises the string to a room using the scorer if the string is not a room.
+Then, the algorithm looks up the address of the room.
+Finally, the algorithm returns the address.
+
+\newpage
 
 \section{Experimentation}
 
+Keeping the hardware and rest of the system fixed, we evaluated our denoiser against Levenshtein distance, Damerau--Levenshtein distance (DL), longest common subsequence length (LCS), and character histogram intersection (CH) denoisers,
+measuring the accuracy and mean latency of each denoiser on the test set.
 % We display the results with more natural units and scale, for your perusal
 
 \begin{table}[H]
@@ -254,24 +258,60 @@ Finally, the algorithm looks up the address of the room, and returns the address
 		\toprule
 		Denoiser & Accuracy (\%) & Mean Latency (ms) \\
 		\midrule
-		Identity & 0.00 & 5.71$\mathrm{E}^{-4}$ \\
-		Levenshtein & 72.5 & 9.05 \\
-		Damerau--Levenshtein & 71.9 & 16.8 \\
-		Longest Common Subsequence & 59.2 & 5.38 \\
-		Character Histogram Intersection & 37.1 & 0.289 \\
-		Ours & 97.3 & 7.88 \\
+		L & 72.5 & 9.05 \\
+		DL & 71.9 & 16.8 \\
+		LCS & 59.2 & 5.38 \\
+		CH & 37.1 & \textbf{0.289} \\
+		Ours & \textbf{97.3} & 7.88 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-Keeping the hardware and rest of the system fixed, we evaluated four (candidate) denoisers,
-evaluating each resulting system on the test set using accuracy and mean latency.
+L captures insertions, deletions, and substitutions.
+DL extends L by capturing adjacent transpositions.
+LCS and CH capture ordered and unordered character overlap respectively.
 Accuracy was measured using the fraction of test inputs for which final address equals gold address.
 Mean latency was measured using the mean time taken to get an output from giving an input.
 
+\newpage
+
 \section{Deployment}
 
-We deployed SUTD 404 as web application served at \url{sutd404.netlify.app}
-using 
+We deployed SUTD 404 as web application served at \url{sutd404.vercel.app}.
+
+\begin{algorithm}[H]
+	\caption{$\textsc{Predict}(x)$}
+	\begin{algorithmic}
+		\Require $x\in V^{*}$
+		\State $x\gets\textsc{Strip}(x)$
+		\State $x\gets\textsc{Lowercase}(x)$
+		\State $x\gets\textsc{AlphanumericSplit}(x)$
+		\State $x\gets\textsc{Alias}(x)$
+		\If{$x\in R$}
+			\Return $(x,\mathscr{L}(x))$
+		\EndIf
+		\State ${
+			O
+			\gets
+			\bigcup_{
+				f
+				\in
+				\{
+					\textsc{L},
+					\textsc{DL},
+					\textsc{LCS},
+					\textsc{CH},
+					\textsc{Ours}
+				\}
+			}
+			\arg\operatorname{top}_{r\in R}^{(2)}f(x,r)
+		}$
+		\State $O\gets\{(o,\mathscr{L}(o))\mid o\in O\}$
+		\State $O\gets\textsc{LexicographicSort}(O)$
+		\State \Return $O$
+	\end{algorithmic}
+\end{algorithm}
+
+Our prediction algorithm uses all denoisers in parallel as they have comparable latencies on millisecond timescales and are able to cover each others' weaknesses.
 
 \end{document}
