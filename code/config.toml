@@ -16,5 +16,5 @@ run = "5327"
 
 [deploy]
 api = "https://api.netlify.com/api/v1"
-site = "sutdoko"
+site = "sutd404"
 team = "gregorylimeurhen"
