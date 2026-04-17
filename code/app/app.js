@@ -647,6 +647,9 @@ class Model {
 
 	solve(text) {
 		const input = this.normalize(text)
+		if (!input) {
+			return []
+		}
 		let out = []
 		if (this.roomSet.has(input)) {
 			out.push(input)
@@ -655,7 +658,9 @@ class Model {
 		out.push(...this.nearestRooms(input, this.damerau))
 		out.push(...this.bestRooms(input, this.lcs))
 		out.push(...this.histRooms(input))
-		out.push(...this.decodeBeam(input, 2))
+		try {
+			out.push(...this.decodeBeam(input, 2))
+		} catch (_) {}
 		return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b))
 	}
 }
@@ -697,7 +702,11 @@ ui.form.addEventListener("submit", event => {
 	if (!model) {
 		return
 	}
-	render(model.solve(ui.input.value))
+	try {
+		render(model.solve(ui.input.value))
+	} catch (err) {
+		render([String(err.message || err)])
+	}
 })
 
 
