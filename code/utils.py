@@ -19,7 +19,9 @@ PAD_TOKEN = "<pad>"
 SEP_TOKEN = "<sep>"
 EOS_TOKEN = "<eos>"
 UNK_TOKEN = "<unk>"
-BASELINE_NAMES = ["identity", "levenshtein", "damerau_levenshtein", "ours"]
+BASELINE_NAMES = ["identity", "levenshtein", "damerau_levenshtein"]
+BASELINE_NAMES += ["longest_common_subsequence"]
+BASELINE_NAMES += ["character_histogram_intersection", "ours"]
 
 
 class Tokenizer:
@@ -760,6 +762,43 @@ def damerau_levenshtein_distance(left, right, max_distance=None):
 	return distance
 
 
+def lcs_length(left, right, min_score=None):
+	if len(left) < len(right):
+		left, right = right, left
+	if min_score is not None and len(right) < min_score:
+		return -1
+	previous = [0] * (len(right) + 1)
+	for left_char in left:
+		current = [0]
+		for right_index, right_char in enumerate(right, start=1):
+			value = previous[right_index]
+			if current[-1] > value:
+				value = current[-1]
+			if left_char == right_char:
+				match = previous[right_index - 1] + 1
+				if match > value:
+					value = match
+			current.append(value)
+		previous = current
+	return previous[-1]
+
+
+def char_hist(text):
+	hist = {}
+	for char in text:
+		hist[char] = hist.get(char, 0) + 1
+	return hist
+
+
+def hist_score(left, right, min_score=None):
+	score = 0
+	for char, count in left.items():
+		score += min(count, right.get(char, 0))
+	if min_score is not None and score < min_score:
+		return -1
+	return score
+
+
 def nearest_room_address(text, room_lookup, rooms, rng, distance_fn):
 	best_distance = None
 	best_rooms = []
@@ -775,6 +814,21 @@ def nearest_room_address(text, room_lookup, rooms, rng, distance_fn):
 	return room_lookup[room]
 
 
+def best_room_address(text, room_lookup, rooms, rng, score_fn):
+	best_score = None
+	best_rooms = []
+	for room in rooms:
+		current_score = score_fn(text, room, best_score)
+		if best_score is None or current_score > best_score:
+			best_score = current_score
+			best_rooms = [room]
+			continue
+		if current_score == best_score:
+			best_rooms.append(room)
+	room = best_rooms[rng.randrange(len(best_rooms))]
+	return room_lookup[room]
+
+
 def levenshtein_address(text, room_lookup, rooms, rng):
 	fn = levenshtein_distance
 	return nearest_room_address(text, room_lookup, rooms, rng, fn)
@@ -785,20 +839,49 @@ def damerau_levenshtein_address(text, room_lookup, rooms, rng):
 	return nearest_room_address(text, room_lookup, rooms, rng, fn)
 
 
+def lcs_address(text, room_lookup, rooms, rng):
+	fn = lcs_length
+	return best_room_address(text, room_lookup, rooms, rng, fn)
+
+
+def hist_address(text, room_lookup, room_hists, rng):
+	left = char_hist(text)
+	best_score = None
+	best_rooms = []
+	for room, right in room_hists:
+		score = hist_score(left, right, best_score)
+		if best_score is None or score > best_score:
+			best_score = score
+			best_rooms = [room]
+			continue
+		if score == best_score:
+			best_rooms.append(room)
+	room = best_rooms[rng.randrange(len(best_rooms))]
+	return room_lookup[room]
+
+
 def evaluate_rows_into(model, rows, tok, dev, rm, rooms, write, seed):
 	room_set = set(rooms)
 	trie = build_room_trie(rooms, tok)
 	lev_rng = Rng(seed)
 	dam_rng = Rng(seed)
+	lcs_rng = Rng(seed)
+	hist_rng = Rng(seed)
 	ours_rng = Rng(seed)
+	room_hists = [(room, char_hist(room)) for room in rooms]
 	preds = {}
 	preds["identity"] = lambda text: rm.get(text, "")
 	lev = levenshtein_address
 	dam = damerau_levenshtein_address
+	lcs = lcs_address
 	pick = lambda text: predict_room(model, tok, dev, text, trie, ours_rng)
 	preds["levenshtein"] = lambda text: lev(text, rm, rooms, lev_rng)
 	name = "damerau_levenshtein"
 	preds[name] = lambda text: dam(text, rm, rooms, dam_rng)
+	name = "longest_common_subsequence"
+	preds[name] = lambda text: lcs(text, rm, rooms, lcs_rng)
+	name = "character_histogram_intersection"
+	preds[name] = lambda text: hist_address(text, rm, room_hists, hist_rng)
 	preds["ours"] = lambda text: rm[text] if text in room_set else rm[pick(text)]
 	stats = {name: {"correct": 0, "latency": 0.0} for name in BASELINE_NAMES}
 	show_progress("test", 0, len(rows))

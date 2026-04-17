@@ -6,12 +6,13 @@
 \usepackage{amsthm}
 \usepackage{bm}
 \usepackage{booktabs}
-\usepackage[a4paper, margin=1in]{geometry}
 \usepackage[scr=boondox]{mathalpha}
 \usepackage{mathtools}
 \usepackage{mleftright}
 \usepackage{parskip}
 \usepackage{physics}
+\usepackage{times}
+\usepackage{url}
 \usepackage{xcolor}
 \usepackage{xparse}
 
@@ -34,8 +35,35 @@
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\N}{\mathbb{N}}
 \newcommand{\R}{\mathbb{R}}
+\newcommand{\Z}{\mathbb{Z}}
+
+\title{SUTD 404}
+\author{
+	Gregory Lim,
+	Edison Ang,
+	Manishansh Shaswat,
+	Muthu Ramaswamy
+}
+\date{April 2026}
 
 \begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+The Singapore University of Technology and Design (SUTD) has over 200 rooms split across 5 buildings.
+To help people (especially visitors) find rooms,
+each room is assigned an address of the form
+$\texttt{x.y-z}$,
+where $\texttt{x}$ is a building number,
+$\texttt{y}$ is a floor number,
+and $\texttt{z}$ is a room number.
+However, resources that aim to map rooms to addresses remain few and far between.
+Physical resources like campus signs exist, but require one to walk around, expending lots of energy and time.
+Digital resources like the SUTD Assistive Maps (SAM) Telegram bot exist, but are often arduous to maintain and less robust to noise like typos (which can be especially pertinent for visitors who do not often type in English).
+To fill this gap, we built SUTD 404, a digital resource that aims to maps rooms to addresses in a way that learns over time and handles noise gracefully.
+Our GitHub repository can be found at \url{gregorylimeurhen/sutd404}.
 
 \section{Methodology}
 
@@ -50,41 +78,69 @@ and $R\subseteq V^{*}$ be a room set,
 and $A\subseteq V^{*}$ be an address set,
 and $B\subseteq V$ be a boundary set,
 and $C\in\N$ be a corruption count,
-and $\beta\in\R_{[0,1]}$ be a substitution rate,
 and $\alpha\in\R_{[0,1]}$ be a transposition rate,
+and $\beta\in\R_{[0,1]}$ be a substitution rate,
 and $\bm{\pi}=(\pi_\mathrm{train},\pi_\mathrm{val},\pi_\mathrm{test})\in\Delta^{2}$ be a training-validation-testing split,
+and $P:V\rightharpoonup\Z^{2}$ be a keyboard-position map,
 and $C\bm{\pi}\in\N^{3}$.
 
 \begin{definition}[Keyboard]
-$$
-K
-=
-\begin{bmatrix}
-	\texttt{`} & & \texttt{1} & & \texttt{2} & & \texttt{3} & & \texttt{4} & & \texttt{5} & & \texttt{6} & & \texttt{7} & & \texttt{8} & & \texttt{9} & & \texttt{0} & & \texttt{-} & & \texttt{=}
-	\\
-	\texttt{q} & & \texttt{w} & & \texttt{e} & & \texttt{r} & & \texttt{t} & & \texttt{y} & & \texttt{u} & & \texttt{i} & & \texttt{o} & & \texttt{p} & & \texttt{[} & & \texttt{]} & & \texttt{\textbackslash}
-	\\
-	& & \texttt{a} & & \texttt{s} & & \texttt{d} & & \texttt{f} & & \texttt{g} & & \texttt{h} & & \texttt{j} & & \texttt{k} & & \texttt{l} & & \texttt{;} & & \texttt{'} & &
-	\\
-	& & & \texttt{z} & & \texttt{x} & & \texttt{c} & & \texttt{v} & & \texttt{b} & & \texttt{n} & & \texttt{m} & & \texttt{,} & & \texttt{.} & & \texttt{/} & & & &
-	\\
-	& & & & & & & & & & \textvisiblespace & \textvisiblespace & \textvisiblespace & \textvisiblespace & \textvisiblespace & & & & & & & & & &
-\end{bmatrix}
-$$
+$${\setlength{\arraycolsep}{2pt}
+	K
+	=
+	\begin{bmatrix}
+		\texttt{`} & & \texttt{1} & & \texttt{2} & & \texttt{3} & & \texttt{4} & & \texttt{5} & & \texttt{6} & & \texttt{7} & & \texttt{8} & & \texttt{9} & & \texttt{0} & & \texttt{-} & & \texttt{=}
+		\\
+		\texttt{q} & & \texttt{w} & & \texttt{e} & & \texttt{r} & & \texttt{t} & & \texttt{y} & & \texttt{u} & & \texttt{i} & & \texttt{o} & & \texttt{p} & & \texttt{[} & & \texttt{]} & & \verb|\|
+		\\
+		& & \texttt{a} & & \texttt{s} & & \texttt{d} & & \texttt{f} & & \texttt{g} & & \texttt{h} & & \texttt{j} & & \texttt{k} & & \texttt{l} & & \texttt{;} & & \texttt{'} & &
+		\\
+		& & & \texttt{z} & & \texttt{x} & & \texttt{c} & & \texttt{v} & & \texttt{b} & & \texttt{n} & & \texttt{m} & & \texttt{,} & & \texttt{.} & & \texttt{/} & & & &
+		\\
+		& & & & & & & & & & \textvisiblespace & \textvisiblespace & \textvisiblespace & \textvisiblespace & \textvisiblespace & & & & & & & & & &
+	\end{bmatrix}
+}$$
 \end{definition}
+
+Our keyboard uses the 60\% ANSI QWERTY en-US keyboard layout without backspace, tab, caps lock, enter, shift, ctrl, alt, and system keys.
+All keys have equal padding between them.
 
 \begin{algorithm}[H]
 	\caption{$\textsc{Corrupt}(\bm{x})$}
 	\begin{algorithmic}
+		\Require $\bm{x}\in V^{*}$
+		% \State $T\gets\{\bm{u}\bm{v}b\bm{w}\bm{z}=\bm{x}\}$
+		% \State ${
+		% 	T
+		% 	\gets
+		% 	\{
+		% 		\bm{u}\bm{v}b\bm{w}\bm{z}\in T
+		% 		\mid
+		% 		\bm{u}\in V^{*}B\cup\{\epsilon\},\,
+		% 		\bm{z}\in BV^{*}\cup\{\epsilon\}
+		% 	\}
+		% }$
+		% \State ${
+		% 	T
+		% 	\gets
+		% 	\{
+		% 		\bm{u}\bm{v}b\bm{w}\bm{z}\in T
+		% 		\mid
+		% 		\bm{v},\bm{w}\in(V\setminus B)^{+},\,
+		% 		b\in B
+		% 	\}
+		% }$
+		\State $(L,R)\gets(\{\bm{\epsilon}\}\cup V^{*}B,\{\bm{\epsilon}\}\cup BV^{*})$
+		\State $F\gets(V\setminus B)^{+}$
 		\State ${
 			T
 			\gets
 			\{
 				\bm{u}\bm{w}b\bm{v}\bm{z}
 				\mid
-				\bm{u}\in\{\bm{\epsilon}\}\cup V^{*}B,\,
-				\bm{z}\in\{\bm{\epsilon}\}\cup BV^{*},\,
-				\bm{v},\bm{w}\in (V\setminus B)^{+},\,
+				\bm{u}\in L,\,
+				\bm{z}\in R,\,
+				\bm{v},\bm{w}\in F,\,
 				b\in B,\,
 				\bm{x}=\bm{u}\bm{v}b\bm{w}\bm{z}
 			\}
@@ -95,7 +151,7 @@ $$
 			${\bm{x}\sim\alpha\,\mathcal{U}(T)+(1-\alpha)\,\delta(\bm{x})}$
 		\EndIf
 		\For{$i\in[1..\abs{\bm{x}}]$}
-			\State $S\gets\{k\in K\setminus \{x_{i}\}\mid k-x_{i}\in[-1..1]\times[-2..2]\}$
+			\State $S\gets\{k\in K\setminus \{x_{i}\}\mid P(k)-P(x_{i})\in[-1..1]\times[-2..2]\}$
 			\If{$S\neq\varnothing$}
 				${x_{i}\sim\beta\,\mathcal{U}(S)+(1-\beta)\,\delta(x_{i})}$
 			\EndIf
@@ -104,41 +160,55 @@ $$
 	\end{algorithmic}
 \end{algorithm}
 
+Our corruption algorithm corrupts strings by transposing spans and substituting characters.
+First, the algorithm rolls a dice that
+either does nothing
+or transposes spans in the string by uniformly sampling from the space of span transpositions.
+Then, for each character in the string, the algorithm rolls a dice that
+either does nothing
+or substitutes the character by uniformly sampling from the space of character substitutions.
+This space contains nearby characters collected by sliding a window of height $3$ and width $5$ centred at each position in $K$.
+
 \begin{algorithm}[H]
 	\caption{$\textsc{Split}()$}
 	\begin{algorithmic}
-		\State $D_\mathrm{train}\gets\varnothing$
-		\State $D_\mathrm{val}\gets\varnothing$
-		\State $D_\mathrm{test}\gets\varnothing$
+		\State $(D_\mathrm{train},D_\mathrm{val},D_\mathrm{test})\gets(\varnothing,\varnothing,\varnothing)$
 		\For{$r\in R$}
 			\State $P\gets\varnothing$
 			\While{$\abs{P}<C$}
 				\State $r'\sim\textsc{Corrupt}(r)$
 				\If{$r'\neq r$}
-					\State $P\gets P\cup\{(r',r)\}$
+					$P\gets P\cup\{(r',r)\}$
 				\EndIf
 			\EndWhile
 			\State $P_\mathrm{train}\sim\mathcal{U}(\{Q\subseteq P\mid \abs{Q}=\pi_\mathrm{train}C\})$
 			\State $P_\mathrm{val}\sim\mathcal{U}(\{Q\subseteq P\setminus P_\mathrm{train}\mid \abs{Q}=\pi_\mathrm{val}C\})$
 			\State $P_\mathrm{test}\gets P\setminus(P_\mathrm{train}\cup P_\mathrm{val})$
-			\State $D_\mathrm{train}\gets D_\mathrm{train}\cup P_\mathrm{train}$
-			\State $D_\mathrm{val}\gets D_\mathrm{val}\cup P_\mathrm{val}$
-			\State $D_\mathrm{test}\gets D_\mathrm{test}\cup P_\mathrm{test}$
+			\State ${
+				(D_\mathrm{train},D_\mathrm{val},D_\mathrm{test})
+				\gets
+				(
+					D_\mathrm{train}\cup P_\mathrm{train},
+					D_\mathrm{val}\cup P_\mathrm{val},
+					D_\mathrm{test}\cup P_\mathrm{test}
+				)
+			}$
 		\EndFor
 		\State \Return $(D_\mathrm{train},D_\mathrm{val},D_\mathrm{test})$
 	\end{algorithmic}
 \end{algorithm}
 
 \begin{definition}[Denoiser]
+Let $f:V^{*}\times R\to\R$ be a scorer.
 \begin{align*}
-	\mathscr{F}
+	\mathscr{D}_{f}
 	&:
 	V^{*}\to R
 	\\
-	\mathscr{F}(x)
+	\mathscr{D}_{f}(x)
 	&=
 	\argmax_{r\in R}
-	\log\Pr(r\mid x)
+	f(x,r)
 \end{align*}
 \end{definition}
 
@@ -157,63 +227,64 @@ $$
 % so look-up for `foo` yields `A, B`
 % The data is thus fixed after preprocessing
 
-The denoiser is a Nanochat-parameterised, character-level transformer
-with **greedy decoding constrained by the room trie**.
-But the decoder can obviously be swapped out for whatever you want.
-We use cross-entropy loss with the Adam optimiser.
+Our denoiser is a standard Nanochat-parameterised transformer of depth $2$ with character-level tokenisation.
+We use character-level tokenisation as typos are often character-level, and room names are short enough for individual characters to be highly meaningful semantic units for our task.
+We use a standard cross-entropy loss and AdamW optimiser.
+A complete list of hyperparameters can be found in our GitHub repository.
+Our lookup is a standard key-value map from rooms to addresses.
 
 % Search the web for https://github.com/karpathy/nanochat
 % Everything is clean, default, and standard with no other stuffs:
 % - Training loss applied only to clean (target) portion
 % - Adam on default settings
-% - Batch size derived as largest batch that fits in memory
-% - Seed 0
+% - Batch size derivable as largest batch that fits in memory
+% - Seed 1
 % - Nothing else, no dropout or whatever
 % We log to our `wandb` account
 
 \begin{algorithm}[H]
-	\caption{$\textsc{Infer}(x)$}
+	\caption{$\textsc{Infer}(f,x)$}
 	\begin{algorithmic}
+		\Require $f:V^{*}\to\R$, $x\in V^{*}$
 		\State $x\gets\textsc{Strip}(x)$
 		\State $x\gets\textsc{Lowercase}(x)$
 		\If{$x\not\in R$}
-			\State $r\gets\mathscr{F}(x)$
-		\Else
-			\State $r\gets x$
+			\State $x\gets\mathscr{D}_{f}(x)$
 		\EndIf
-		\State $a\gets\mathscr{L}(r)$
-		\State \Return $a$
+		\State $x\gets\mathscr{L}(r)$
+		\State \Return $x$
 	\end{algorithmic}
 \end{algorithm}
 
-% At inference, keep the trained character-level transformer exactly as it is, but replace greedy trie decoding with an anytime search over the room trie.
-% First, run the current greedy decoder once to get an initial best room.
-% Then keep a priority queue of trie prefixes, where each prefix is a partial room name that can still be extended to some room in $R$.
-% Score each prefix by the transformer’s accumulated log-probability on the characters generated so far, and use a tiny extra priority bonus for prefixes whose possible completions have lengths close to the query length, so that obviously too-short or too-long rooms are explored later.
-% Repeatedly expand the highest-priority prefix by one trie character, update the current best answer whenever a complete room is found with a better transformer score, and continue until either you want to stop and return the best room found so far, or the remaining unfinished prefixes can no longer beat the current best room, in which case the result is the exact global best room under the model.
-% This changes only the decoder, needs no new training, and gives the Stockfish-like behaviour of immediate answers, smooth improvement, and exact convergence if allowed to continue.
-% Use pure branch-and-bound priority equal to the admissible upper bound itself, with no extra heuristic at all.
+Our inference algorithm receives a scorer and string as input.
+First, the algorithm normalises the string by stripping whitespace and lowercasing letters.
+Then, the algorithm denoises the string to a room using the scorer if the string is not a room.
+Finally, the algorithm looks up the address of the room, and returns the address.
 
 \section{Experimentation}
 
-% We compare our method with the following online baselines
+% We display the results with more natural units and scale, for your perusal
 
 \begin{table}[H]
 	\centering
-	\begin{tabular}{llll}
+	\caption{Summary.}
+	\begin{tabular}{lll}
 		\toprule
-		Index & Denoiser & Accuracy (\%) & Mean Latency (s) \\
+		Denoiser & Accuracy (\%) & Mean Latency (ms) \\
 		\midrule
-		1 & Identity & & \\
-		2 & Levenshtein & & \\
-		3 & Damerau--Levenshtein & & \\
-		4 & Ours & & \\
+		Identity & 0.00 & 5.71$\mathrm{E}^{-4}$ \\
+		Levenshtein & 72.5 & 9.05 \\
+		Damerau--Levenshtein & 71.9 & 16.8 \\
+		Longest Common Subsequence & 59.2 & 5.38 \\
+		Character Histogram Intersection & 37.1 & 0.289 \\
+		Ours & 97.3 & 7.88 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-% We evaluate each system on **fixed hardware** on the test set via accuracy and mean latency,
-% where accuracy is fraction of test inputs for which final address equals gold address,
-% and mean latency is mean wall-clock seconds from input to output
+Keeping the hardware and rest of the system fixed, we evaluated four (candidate) denoisers,
+evaluating each resulting system on the test set using accuracy and mean latency.
+Accuracy was measured using the fraction of test inputs for which final address equals gold address.
+Mean latency was measured using the mean time taken to get an output from giving an input.
 
 \end{document}

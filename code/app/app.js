@@ -53,6 +53,10 @@ class Model {
 		for (let i = 0; i < this.vocab.length; i += 1) {
 			this.stoi[this.vocab[i]] = i
 		}
+		this.roomHists = []
+		for (const room of this.rooms) {
+			this.roomHists.push([room, this.charHist(room)])
+		}
 		for (const name of Object.keys(assets.tensors)) {
 			const info = assets.tensors[name]
 			this.ws[name] = new Float32Array(buf, info.offset, info.size)
@@ -99,6 +103,14 @@ class Model {
 			}
 		}
 		return text
+	}
+
+	charHist(text) {
+		const hist = {}
+		for (const char of text) {
+			hist[char] = (hist[char] || 0) + 1
+		}
+		return hist
 	}
 
 	addInto(dst, src) {
@@ -551,6 +563,34 @@ class Model {
 		return dist
 	}
 
+	lcs(left, right, limit) {
+		if (right.length > left.length) {
+			[left, right] = [right, left]
+		}
+		if (limit != null && right.length < limit) {
+			return -1
+		}
+		let prev = Array(right.length + 1).fill(0)
+		for (let i = 1; i <= left.length; i += 1) {
+			const next = [0]
+			for (let j = 1; j <= right.length; j += 1) {
+				let value = prev[j]
+				if (next[next.length - 1] > value) {
+					value = next[next.length - 1]
+				}
+				if (left[i - 1] === right[j - 1]) {
+					const match = prev[j - 1] + 1
+					if (match > value) {
+						value = match
+					}
+				}
+				next.push(value)
+			}
+			prev = next
+		}
+		return prev[prev.length - 1]
+	}
+
 	nearestAddress(text, seed, fn) {
 		let best = null
 		let rooms = []
@@ -570,12 +610,62 @@ class Model {
 		return this.roomMap[room]
 	}
 
+	bestAddress(text, seed, fn) {
+		let best = null
+		let rooms = []
+		const rng = new Rng(seed)
+		for (const room of this.rooms) {
+			const score = fn.call(this, text, room, best)
+			if (best == null || score > best) {
+				best = score
+				rooms = [room]
+				continue
+			}
+			if (score === best) {
+				rooms.push(room)
+			}
+		}
+		const room = rooms[rng.int(rooms.length)]
+		return this.roomMap[room]
+	}
+
+	histScore(left, right) {
+		let score = 0
+		for (const char of Object.keys(left)) {
+			score += Math.min(left[char], right[char] || 0)
+		}
+		return score
+	}
+
+	histAddress(text, seed) {
+		const left = this.charHist(text)
+		let best = null
+		let rooms = []
+		const rng = new Rng(seed)
+		for (const [room, right] of this.roomHists) {
+			const score = this.histScore(left, right)
+			if (best == null || score > best) {
+				best = score
+				rooms = [room]
+				continue
+			}
+			if (score === best) {
+				rooms.push(room)
+			}
+		}
+		const room = rooms[rng.int(rooms.length)]
+		return this.roomMap[room]
+	}
+
 	solve(text) {
 		const input = this.normalize(text)
 		const out = {input}
 		out.identity = this.roomMap[input] || ""
 		out.levenshtein = this.nearestAddress(input, this.seed, this.levenshtein)
 		out.damerau_levenshtein = this.nearestAddress(input, this.seed, this.damerau)
+		const lcs = this.bestAddress(input, this.seed, this.lcs)
+		out.longest_common_subsequence = lcs
+		out.character_histogram_intersection = this.histAddress(input, this.seed)
 		const exact = this.roomSet.has(input)
 		const room = exact ? input : this.predictRoom(input, this.seed)
 		out.ours_room = room
