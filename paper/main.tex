@@ -1,4 +1,5 @@
 \documentclass{article}
+
 \usepackage{algorithm}
 \usepackage[noend]{algpseudocode}
 \usepackage{amsfonts}
@@ -79,7 +80,7 @@ which can be especially common among
 visitors unfamiliar with the rooms
 and people with less experience typing in English.
 
-To fill this gap,
+To address this gap,
 we introduce SUTD404,
 a digital resource for noisy room-to-address lookup.
 Visit
@@ -121,7 +122,7 @@ $${\setlength{\arraycolsep}{2pt}
 		\\
 		& & & \texttt{z} & & \texttt{x} & & \texttt{c} & & \texttt{v} & & \texttt{b} & & \texttt{n} & & \texttt{m} & & \texttt{,} & & \texttt{.} & & \texttt{/} & & & &
 		\\
-		& & & & & & & & & & \textvisiblespace & \textvisiblespace & \textvisiblespace & \textvisiblespace & \textvisiblespace & & & & & & & & & &
+		& & & & & & & & & & \texttt{\textvisiblespace} & \texttt{\textvisiblespace} & \texttt{\textvisiblespace} & \texttt{\textvisiblespace} & \texttt{\textvisiblespace} & & & & & & & & & &
 	\end{bmatrix}
 }$$
 \end{definition}
@@ -130,15 +131,16 @@ Our keyboard uses the 60\% ANSI QWERTY en-US keyboard layout without backspace, 
 \citep{qwerty}.
 All keys have equal padding between them.
 
-We obtained $R$ by politely scraping official SUTD contact pages.
-
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.95\linewidth]{contact.png}
-	\caption{SUTD contact page.}
+	\caption{Official SUTD contact pages.}
 \end{figure}
 
-The facility search function was queried by enumerating over all buildings and floors.
+We obtained $R$ by politely scraping official SUTD contact pages.
+The facility search function was queried by enumerating buildings and floors.
+
+\newpage
 
 \begin{algorithm}[H]
 	\caption{$\textsc{Corrupt}(\bm{x})$}
@@ -236,12 +238,19 @@ The facility search function was queried by enumerating over all buildings and f
 	\end{algorithmic}
 \end{algorithm}
 
+We generated corrupted strings
+and split corrupted-uncorrupted room pairs
+into training, validation, and testing sets.
 Our corruption algorithm corrupts strings by transposing spans and substituting characters.
 First, the algorithm samples whether to transpose spans by uniformly sampling from the space of span transpositions.
 Then, for each character in the string, the algorithm samples whether to substitute the character by uniformly sampling from the space of character substitutions.
 This space contains nearby characters collected by sliding a window of height $3$ and width $5$ centred at each position in $K$.
 Finally, the algorithm returns the string.
-We set $C=50$, and $\alpha=0.5$, and $\beta=0.05$, and $\bm{\pi}=(0.8,0.1,0.1)$ to generate plausible-looking typos in a tractable way.
+We set $C=50$, and $\alpha=0.5$, and $\beta=0.05$, and $\bm{\pi}=(0.8,0.1,0.1)$
+to generate plausible-looking typos in a tractable way.
+The split is stratified by room to make the training, validation, and test sets comparable across rooms.
+
+\newpage
 
 \begin{definition}[Denoiser]
 Let $f:V^{*}\times R\to\R$ be a scorer.
@@ -260,9 +269,10 @@ Let $f:V^{*}\times R\to\R$ be a scorer.
 
 Our denoiser is a Nanochat-parameterised, character-level transformer of depth 2 with decoding constrained to the trie induced by $R$
 \citep{nanochat}.
-We use character-level tokenisation as typos are often character-level, and room names are short enough for individual characters to be highly meaningful semantic units for our task.
-We use trie-constrained decoding to efficiently avoid hallucination caused by unconstrained decoding.
-To train our denoiser, we use a standard cross-entropy loss and AdamW optimiser on default settings.
+We use character-level tokenisation as typos are often character-level, and room names are often short enough for individual characters to be meaningful lexical units for our task.
+We use trie-constrained decoding to efficiently avoid room hallucination.
+
+Our denoiser is trained using a standard cross-entropy loss and AdamW optimiser.
 A more complete list of hyperparameters can be found in our repository.
 
 \begin{definition}[Lookup]
@@ -308,15 +318,7 @@ Firstly, the algorithm denoises the string to a room using the scorer if the str
 Then, the algorithm looks up the address of the room.
 Finally, the algorithm returns the address.
 
-We first evaluated our denoiser against
-identity (I),
-substring Jaccard similarity (SJ),
-negative Damerau--Levenshtein distance (DL),
-and
-longest common prefix length (LCP)
-denoisers,
-measuring the accuracy and mean latency of each denoiser on the test set.
-To maximise fairness and reproducibility, we fixed a seed and hardware.
+\newpage
 % We display the results with more natural units and scale, for your perusal
 
 \begin{table}[H]
@@ -334,14 +336,16 @@ To maximise fairness and reproducibility, we fixed a seed and hardware.
 	\caption{Denoiser evaluation results summary.}
 \end{table}
 
+We first evaluated our denoiser against
+substring Jaccard similarity (SJ),
+negative Damerau--Levenshtein distance (DL),
+and
+longest common prefix length (LCP)
+denoisers,
+measuring the accuracy and mean latency of each denoiser on the test set.
+To maximise fairness and reproducibility, we fixed a seed and hardware.
 Accuracy was measured using the fraction of test inputs for which final address equals gold address.
 Mean latency was measured using the mean time taken to get an output from giving an input.
-
-We implemented our system as a web application.
-We set $N=26$ because, grouping rooms by shared prefix up to terminal numbers,
-the largest group (the group of Think Tank rooms) contains $26$ rooms,
-so showing $26$ results could allow a user to find their room by prefix
-without disambiguating by terminal numbers.
 
 \begin{algorithm}[H]
 	\caption{$\textsc{Predict}(x)$}
@@ -402,6 +406,11 @@ without disambiguating by terminal numbers.
 	\end{algorithmic}
 \end{algorithm}
 
+We implemented and deployed our system as a web application.
+We set $N=26$ because, grouping rooms by shared prefix up to terminal numbers,
+the largest group (the group of Think Tank rooms) contains $26$ rooms,
+so showing $26$ results could allow a user to find their room by prefix
+without disambiguating by terminal numbers.
 Our prediction algorithm receives a string as input.
 Firstly, the algorithm normalises the string by
 stripping whitespace,
@@ -410,10 +419,14 @@ lowercasing,
 separating letters from numbers,
 and replacing words with their aliases,
 to make the string more closely match training strings.
-Then, the algorithm computes top-ranked rooms. % Ours still uses constrained decoding
+Then, the algorithm computes top-ranked rooms using harmonically-weighted Borda ranking. % Ours still uses constrained decoding
 Finally, the algorithm looks up the address of each room, returning top-ranked room-address pairs.
 
-\newpage
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.95\linewidth]{app.png}
+	\caption{Web application.}
+\end{figure}
 
 To further improve the user experience,
 we also implemented the following features to make the application more efficient and responsive.
@@ -428,7 +441,7 @@ we also implemented the following features to make the application more efficien
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.95\linewidth]{sam.png}
-	\caption{SAM user interface.}
+	\caption{SAM.}
 \end{figure}
 
 We further evaluated our system against SAM,
@@ -491,7 +504,9 @@ To maximise fairness and reproducibility, we fixed the same seed and hardware as
 	\caption{SAM evaluation results.}
 \end{table}
 
-The results suggest that SAM, as a traditional matching-based algorithm,
+\newpage
+
+Our results suggest that SAM, as a traditional matching-based algorithm,
 can be effective on mildly corrupted inputs with strong lexical overlap---occasionally recovering the exact target---but degrades markedly as noise becomes more severe.
 We conclude that SAM can be robust to limited orthographic variation,
 but can also fail to generalise beyond surface-form similarity.
@@ -510,8 +525,8 @@ but can also fail to generalise beyond surface-form similarity.
 \end{table}
 
 Our system outperformed SAM, achieving complete recovery.
-We believe these results demonstrate strong promise for the task of mapping rooms to addresses under noise,
-and provide a practical foundation for reliable campus assistance.
+We believe these results demonstrate strong promise
+and provide practical foundations for reliable campus assistance.
 
 \section{Appendix}
 

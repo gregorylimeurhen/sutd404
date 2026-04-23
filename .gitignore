@@ -7,5 +7,8 @@ runs/
 *.fdb_latexmk
 *.fls
 *.log
+*.nav
 *.out
+*.snm
 *.synctex.gz
+*.vrb
