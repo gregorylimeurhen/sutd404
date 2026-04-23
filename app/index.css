@@ -1,77 +1,92 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap');
 
 * {
 	box-sizing: border-box;
 	font-size: 16px;
+	margin: 0;
 	overflow-wrap: break-word;
+	padding: 0;
 }
 
 body {
-	background: white;
+	background: whitesmoke;
 	color: black;
-	font-family: "Geist";
-	font-weight: 350;
+	font-family: "Google Sans Flex";
 	height: 100vh;
-	margin: 0;
-	padding: 0;
 	width: 100vw;
 }
 
-:where(input) {
-	font: inherit;
-}
-
-main {
+body main {
 	display: flex;
 	flex-direction: column;
-	justify-content: flex-start;
-	margin-left: auto;
-	margin-right: auto;
-	margin-top: 4rem;
-	width: min(80vw, 30rem);
+	gap: 2rem;
+	margin: 0 auto;
+	padding: 2rem 0;
+	width: min(90vw, 40rem);
 }
 
-section#input {
+body main section#input {
 	position: relative;
 	width: 100%;
 }
 
-img#icon {
-	color: lightgrey;
-	height: 1.5rem;
-	left: 1.5rem;
+body main section#input img#icon {
+	height: 1rem;
+	left: 1rem;
 	position: absolute;
 	top: 50%;
 	transform: translateY(-50%);
-	width: 1.5rem;
+	user-select: none;
+	width: 1rem;
 }
 
-input {
-	border: 1px solid lightgrey;
+body main section#input input {
+	background: white;
+	border: 0;
 	border-radius: 999px;
 	box-shadow: rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.035) 0px 4px 20px 0px, rgba(31, 31, 30, 0.15) 0px 0px 0px 0.5px;
-	font-size: 1.5rem;
+	font-size: 1rem;
+	font-weight: 300;
 	outline: none;
-	padding: 1rem 4rem;
+	padding: 1rem 3rem;
 	width: 100%;
 }
 
-section#output {
-	padding: 3rem 0;
+:where(body main section#input input) {
+	font: inherit;
 }
 
-div + div {
-	margin-top: 3rem;
+body main section#output {
+	display: grid;
+	gap: 1rem;
+	grid-template-columns: 1fr;
 }
 
-h2 {
-	font-weight: 350;
+body main section#output div {
+	align-items: first baseline;
+	background: white;
+	box-shadow: rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.035) 0px 4px 20px 0px, rgba(31, 31, 30, 0.15) 0px 0px 0px 0.5px;
+	border-radius: 0.5rem;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 0.5rem;
+	padding: 1rem;
+}
+
+body main section#output div h2 {
 	font-size: 1rem;
-	line-height: 1.5;
-	margin-bottom: 1rem;
+	font-weight: 300;
 }
 
-p {
-	font-weight: 450;
+body main section#output div p {
 	font-size: 1rem;
+	font-weight: 400;
+}
+
+@media (min-width: 640px) {
+	body main section#output {
+		grid-template-columns: 1fr 1fr;
+	}
 }

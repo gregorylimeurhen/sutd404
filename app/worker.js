@@ -721,7 +721,7 @@ class Model {
 		const picks = []
 		let start = null
 		let i = 0
-		while (i < order.length && picks.length < 3) {
+		while (i < order.length && picks.length < 26) {
 			let j = i + 1
 			while (j < order.length) {
 				const left = order[i]
@@ -732,25 +732,25 @@ class Model {
 				if (jaccard[left] !== jaccard[right]) {
 					break
 				}
-					if (damerau[left] !== damerau[right]) {
-						break
-					}
-					j += 1
+				if (damerau[left] !== damerau[right]) {
+					break
 				}
-				const group = order.slice(i, j)
-				let rows = group
-				if (group.length !== 1) {
-					start = start || this.oursStart(text)
-					rows = this.orderOursGroup(start, group)
-				}
-				for (const index of rows) {
-					picks.push(index)
-					if (picks.length === 3) {
-						break
-					}
-				}
-				i = j
+				j += 1
 			}
+			const group = order.slice(i, j)
+			let rows = group
+			if (group.length !== 1) {
+				start = start || this.oursStart(text)
+				rows = this.orderOursGroup(start, group)
+			}
+			for (const index of rows) {
+				picks.push(index)
+				if (picks.length === 26) {
+					break
+				}
+			}
+			i = j
+		}
 		const out = []
 		for (const index of picks) {
 			const room = this.rooms[index]
@@ -837,10 +837,16 @@ class Model {
 		if (this.roomSet.has(input)) {
 			const out = [[input, this.roomLookup[input] || ""]]
 			this.solveCache.set(input, out)
+			if (this.solveCache.size > 256) {
+				this.solveCache.delete(this.solveCache.keys().next().value)
+			}
 			return out
 		}
 		const out = this.rankRooms(input)
 		this.solveCache.set(input, out)
+		if (this.solveCache.size > 256) {
+			this.solveCache.delete(this.solveCache.keys().next().value)
+		}
 		return out
 	}
 }

@@ -5,15 +5,18 @@ const ui = {
 	output: document.getElementById("output"),
 }
 
-let frame = 0
+const DELAY = 75
+
 let busy = false
 let ready = false
-let queuedText = ""
+let shownText = ""
+let queuedText = null
+let timer = 0
 let worker = null
 
 
-function render(rows) {
-	ui.output.replaceChildren()
+function render(text, rows) {
+	const frag = document.createDocumentFragment()
 	for (const row of rows) {
 		const item = document.createElement("div")
 		const name = document.createElement("h2")
@@ -21,17 +24,28 @@ function render(rows) {
 		name.textContent = row[0]
 		address.textContent = row[1]
 		item.append(name, address)
-		ui.output.append(item)
+		frag.append(item)
 	}
+	shownText = text
+	ui.output.replaceChildren(frag)
 }
 
 
 function flush() {
-	if (!worker || !ready || busy) {
+	if (!worker || !ready || busy || queuedText == null) {
 		return
 	}
 	const text = queuedText
 	queuedText = null
+	if (!text) {
+		if (shownText) {
+			render("", [])
+		}
+		return
+	}
+	if (text === shownText) {
+		return
+	}
 	busy = true
 	worker.postMessage({text, type: "solve"})
 }
@@ -39,25 +53,26 @@ function flush() {
 
 function update() {
 	if (!ready) {
-		render([])
 		return
 	}
 	queuedText = ui.input.value
-	if (!queuedText) {
-		render([])
-	}
 	flush()
 }
 
 
 function queueUpdate() {
-	if (frame) {
+	if (timer) {
+		clearTimeout(timer)
+		timer = 0
+	}
+	if (!ui.input.value) {
+		update()
 		return
 	}
-	frame = requestAnimationFrame(() => {
-		frame = 0
+	timer = setTimeout(() => {
+		timer = 0
 		update()
-	})
+	}, DELAY)
 }
 
 
@@ -76,10 +91,9 @@ function boot() {
 		}
 		if (data.type === "result") {
 			busy = false
-			if (queuedText == null && data.text === ui.input.value) {
-				render(data.rows || [])
-			}
-			if (queuedText == null && data.text !== ui.input.value) {
+			if (data.text === ui.input.value) {
+				render(data.text, data.rows || [])
+			} else {
 				queuedText = ui.input.value
 			}
 			flush()
@@ -87,8 +101,9 @@ function boot() {
 		}
 		if (data.type === "error") {
 			busy = false
-			render([])
-			if (queuedText == null) {
+			if (data.text === ui.input.value) {
+				render("", [])
+			} else {
 				queuedText = ui.input.value
 			}
 			flush()
@@ -96,7 +111,7 @@ function boot() {
 	})
 	worker.addEventListener("error", () => {
 		busy = false
-		render([])
+		render("", [])
 	})
 }
 
