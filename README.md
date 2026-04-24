@@ -7,18 +7,18 @@
 ## Setup
 
 Follow these steps after cloning our repository if you want to run our code locally.
+The latest weights are available in `./experiments/runs/`.
 
 ### Web Application
 
 Follow these steps if you want to run our web application locally.
 
-1. Optionally, download and extract latest weights from latest training artefact into `./experiments/runs/`.
+1. Optionally, configure `./experiments/config.toml`.
 2. Optionally, run `./app/build.py`.
 3. Open `./app/index.html`. For example:
 ```bash
 # sutd404 $
             open ./app/index.html # MacOS
-            xdg-open ./app/index.html # Linux
 ```
 
 ### Experiments
@@ -29,7 +29,7 @@ Follow these steps if you want to run our experiments locally.
 ```bash
 # sutd404 $
             cd experiments
-            mv .env.example .env
+            mv .env.example .env # MacOS
 ```
 2. Set `WANDB_API_KEY` in `./experiments/.env` to working [Weights & Biases (W&B)](http://wandb.ai) API key.
 3. Install packages in `./experiments/requirements.txt`. For example:
@@ -39,8 +39,8 @@ Follow these steps if you want to run our experiments locally.
             pip install -r requirements.txt
 ```
 4. Install [torch](https://pytorch.org/get-started/locally).
-5. Optionally, configure `./experiments/config.toml`.
-5. Run pipeline. For example:
+5. 
+6. Run pipeline. For example:
 ```bash
 # sutd404 $
             cd experiments
@@ -79,7 +79,7 @@ Follow these steps if you want to run our experiments locally.
 │   ├── preprocess.py            # preprocessing script
 │   ├── requirements.txt
 │   ├── runs
-│   │   └── <MMSS>
+│   │   └── 5327
 │   │       ├── test
 │   │       │   ├── results
 │   │       │   └── snapshot.zip
